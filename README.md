@@ -12,11 +12,11 @@ Panama's official institute (IGC, Universidad de Panama).
 
 *The monitor page: sensor signal with the short/long-average ratio (bottom line) and the 60 s measured after
 each trigger, agency requests, and who knew first. The window shown contains a real instrument glitch
-(2026-10-22) that read M6.9: it led to the second-station check described below.*
+that read M6.9: it led to the second-station check described below.*
 
 ## Results
 
-All numbers come from the project's own logs (Oct 10 to Oct 22, 2026). Reference: the IGC's first published
+All numbers come from the project's own logs, measured on the aftershock sequence of the M7.7 earthquake. Reference: the IGC's first published
 magnitude and time for each earthquake.
 
 | Measure | Result |
@@ -29,8 +29,22 @@ magnitude and time for each earthquake.
 | Replay, 78 h | 34 of 40 IGC M5+ earthquakes announced; 0 alerts on two ordinary days |
 | IGC first report delay | 99 to 170 s after the earthquake (median 118 s) |
 
-![Sensor alert vs IGC report, one day](docs/img/head_start_2026-10-12.png)
 ![Earthquakes the sensor announced before the IGC, by magnitude](docs/img/coverage_by_magnitude.png)
+
+## Who it helped
+
+The alerts went to a public channel for people in Panama, and **80+ people used them during the crisis**, in
+the first days after the earthquake when aftershocks kept coming and the official report took one to three
+minutes. The channel was designed with its readers:
+
+- **A poll of followers** decided the alert level and the wording (short, plain Spanish, the reading and how
+  sure it is, plus a link to the official list).
+- **Small earthquakes go into one daily log message** that is edited in place, so phones do not ring for every
+  tremor; only larger readings send a new message.
+- Every alert says it is unofficial and points to the IGC, and followers can react to say they felt it.
+- Daily charts (below) show how many earthquakes the sensor announced before the IGC and by how much.
+
+![Sensor alert vs IGC report, one day](docs/img/head_start_2026-10-12.png)
 
 ## How it works
 
@@ -132,7 +146,7 @@ clock (corrected against network time). Positive means the sensor was first.
 - **One station, no location.** It knows that the ground moved and roughly how much; place and final size come
   from the agencies. The magnitude line is valid for earthquakes about as far as Azuero (around 200 km).
 - **Large earthquakes read low at first** and are updated when the reading grows.
-- **Instrument glitches.** On 2026-10-22 the station produced two false M6.9 readings (raw spikes in all
+- **Instrument glitches.** The station produced two false M6.9 readings (raw spikes in all
   channels, below). The second-station check (DRK0, PIRO) was added and tested on the archive: both glitches
   are held back, while the real M6.3 and an M5.7 still go out 8 to 20 s later.
 - **The IGC also errs.** It published two false large earthquakes (M7.2 and M6.2, later deleted), so IGC reports of
@@ -141,7 +155,7 @@ clock (corrected against network time). Positive means the sensor was first.
 - `whatsapp_web.py` drives WhatsApp Web with a browser. WhatsApp's terms do not allow automation and the number
   can be restricted; use the Telegram or API options in `config.example.json` for anything serious.
 
-![The two false M6.9 readings, raw counts](docs/img/station_glitch_2026-10-22.png)
+![The two false M6.9 readings, raw counts](docs/img/station_glitch.png)
 
 ## Run it
 
@@ -152,7 +166,7 @@ python src/detect.py --minutes 35               # sensor only, logs to src/logs/
 python src/listen.py                            # agency feeds (needs a destination in config.json)
 python src/monitor.py                           # dashboard at http://127.0.0.1:8791 (reads the logs only)
 python src/compare.py                           # head start of the sensor over the IGC
-python tests/glitch_test.py                     # replays the Oct 22 glitch on EarthScope's archive
+python tests/glitch_test.py                     # replays the glitch on EarthScope's archive
 ```
 
 `monitor.py --start` also starts and supervises the other programs. Nothing is sent anywhere unless a
