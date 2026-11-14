@@ -1,0 +1,8 @@
+# a logged-in WhatsApp session and channel credentials: never commit
+whatsapp_profile/
+config.json
+logs/
+data/
+__pycache__/
+*.pyc
+.venv/

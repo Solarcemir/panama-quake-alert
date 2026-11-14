@@ -1,0 +1,6 @@
+obspy>=1.4
+numpy
+aiohttp
+requests
+playwright   # only for whatsapp_web.py
+matplotlib   # only for the report charts

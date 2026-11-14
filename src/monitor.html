@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quake monitor</title>
+<!-- Served by monitor.py, which answers /state once a second from the files in logs/. Nothing here leaves this computer. -->
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11, 11, 11, .10);
+  --sensors: #2a78d6; --agency: #eb6834; --wash: rgba(42, 120, 214, .12);
+  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, .10);
+    --sensors: #3987e5; --agency: #d95926; --wash: rgba(57, 135, 229, .18);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, .10);
+  --sensors: #3987e5; --agency: #d95926; --wash: rgba(57, 135, 229, .18);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+.hint { color: var(--ink2); margin: 0 0 10px; font-size: 13px; max-width: 92ch; }
+.clock { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.clock strong { color: var(--ink); font-weight: 650; }
+#banner { background: var(--surface); border: 1px solid var(--critical); border-radius: 10px; padding: 10px 14px; }
+.chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.chip { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.chip strong { display: block; font-weight: 650; }
+.chip span.text { color: var(--ink2); font-size: 13px; }
+.icon { font-size: 13px; line-height: 20px; width: 14px; text-align: center; flex: none; }
+.icon.good { color: var(--good); } .icon.warning { color: var(--warning); } .icon.critical { color: var(--critical); } .icon.off { color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .two, .chips { grid-template-columns: minmax(0, 1fr); } }
+
+/* live sensor */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--ink2); font-size: 12.5px; margin: 0 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { flex: none; }
+#chart { position: relative; outline-offset: 4px; }
+#chart svg { display: block; width: 100%; overflow: visible; }
+.st-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 14px; font-size: 12.5px; margin-top: 4px; }
+.st-name { font-weight: 650; }
+.st-meta { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.area { fill: var(--sensors); stroke: var(--sensors); stroke-width: 1; stroke-linejoin: round; }
+.rline { fill: none; stroke: var(--sensors); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.zero, .level { stroke: var(--axis); stroke-width: 1; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.followed { fill: var(--wash); }
+.trig { stroke: var(--ink); stroke-width: 1; opacity: .55; }
+.trig-head { fill: var(--ink); }
+.note { fill: var(--muted); font-size: 10.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.lane-label { fill: var(--ink2); font-size: 11.5px; }
+.lane-link { stroke: var(--axis); stroke-width: 1; }
+.m-origin { fill: var(--surface); stroke: var(--agency); stroke-width: 2; }
+.m-published { fill: var(--agency); stroke: var(--surface); stroke-width: 2; }
+.m-sensors { fill: var(--sensors); stroke: var(--surface); stroke-width: 2; }
+.tick { stroke: var(--axis); stroke-width: 1; }
+.tick-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+#cross { position: absolute; top: 0; bottom: 22px; width: 1px; background: var(--ink2); pointer-events: none; }
+#tip { position: absolute; top: 4px; z-index: 2; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .14); white-space: nowrap; }
+#tip .when { color: var(--ink2); margin-bottom: 4px; } #tip .when strong { color: var(--ink); }
+#tip .row { display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+#tip .key { width: 12px; height: 2px; background: var(--sensors); flex: none; }
+#tip .row em { font-style: normal; color: var(--ink2); }
+
+/* tables */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.wide { min-width: 760px; }        /* on a phone these scroll sideways inside their card */
+table.mid { min-width: 480px; }
+th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 12px; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td small, .quiet { color: var(--ink2); }
+.nowrap { white-space: nowrap; }
+.status { display: inline-flex; gap: 6px; align-items: baseline; }
+#log { max-height: 288px; overflow-y: auto; margin-top: 10px; border-top: 1px solid var(--axis); }
+#log td { padding: 3px 10px 3px 0; }
+@keyframes arrive { from { background: var(--wash); } to { background: transparent; } }
+tr.fresh { animation: arrive 2.4s ease-out; }
+@media (prefers-reduced-motion: reduce) { tr.fresh { animation: none; } }
+.msg { border-top: 1px solid var(--grid); padding: 10px 0 2px; }
+.msg:first-child { border-top: 0; padding-top: 2px; }
+.msg .meta { color: var(--ink2); font-size: 12.5px; margin-bottom: 5px; }
+.msg .meta strong { color: var(--ink); font-weight: 600; }
+.msg pre { margin: 0 0 8px; padding: 9px 11px; background: var(--page); border: 1px solid var(--border); border-radius: 10px 10px 10px 2px; font: inherit; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#messages { max-height: 470px; overflow-y: auto; }
+details summary { cursor: pointer; font-weight: 650; font-size: 15px; }
+details[open] summary { margin-bottom: 8px; }
+footer { color: var(--ink2); font-size: 12.5px; max-width: 100ch; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Panama earthquake monitor</h1>
+    <div class="clock"><strong id="clock-pa">--:--:--</strong> Panama &nbsp;·&nbsp; <span id="clock-utc">--:--:--</span> UTC</div>
+  </header>
+
+  <div id="banner" role="alert" hidden></div>
+  <div class="chips" id="chips"></div>
+
+  <section class="card">
+    <h2>Live sensor, last 10 minutes</h2>
+    <p class="hint">Ground motion at the Barro Colorado station in the Panama Canal, as it reaches this computer. The thin line under it is the
+      short/long average ratio. A trigger is not a clock tick: it happens when that ratio crosses the grey level (5), so triggers are as far apart
+      as the earthquakes are (never less than 75 s). The shaded minute after each trigger is what gets measured: its largest motion is read as a
+      magnitude, and an alert is written the moment that reading reaches the announcing level.</p>
+    <div class="legend" aria-label="Legend">
+      <span><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.5" class="m-origin"/></svg>earthquake time (set later by the agency)</span>
+      <span><svg width="14" height="14" aria-hidden="true"><path d="M7 1 L13 7 L7 13 L1 7 Z" class="m-sensors"/></svg>sensor alert</span>
+      <span><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" class="m-published"/></svg>agency published it</span>
+      <span><svg width="22" height="14" aria-hidden="true"><rect x="5" y="2" width="17" height="12" class="followed"/><path d="M1 2 H9 L5 9 Z" class="trig-head"/><path d="M5 2 V14" class="trig"/></svg>trigger and the minute measured after it</span>
+    </div>
+    <div id="chart" tabindex="0" role="img" aria-label="Live signal of the station. Left and right arrows move a cursor that reads the values; the same values are in the line above the signal and in the tables below.">
+      <svg id="lane" height="46" aria-hidden="true"></svg>
+      <div class="st-head"><span><span class="st-name">BCIP</span> Barro Colorado, Panama Canal · 203 km from the mainshock</span><span class="st-meta" id="meta"></span></div>
+      <svg id="wave" height="110" aria-hidden="true"></svg>
+      <svg id="ratio" height="40" aria-hidden="true"></svg>
+      <svg id="axis" height="22" aria-hidden="true"></svg>
+      <div id="cross" hidden></div>
+      <div id="tip" hidden></div>
+    </div>
+  </section>
+
+  <div class="two">
+    <section class="card">
+      <h2>Requests to the agencies</h2>
+      <p class="hint">Every request the listener makes, newest first. Most answers bring nothing new; an earthquake appears as new data.</p>
+      <div class="scroll"><table class="mid">
+        <thead><tr><th>Feed</th><th>Asked</th><th>Last answer</th><th class="num">When</th><th class="num">Took</th><th class="num">Last new data</th></tr></thead>
+        <tbody id="feeds"></tbody>
+      </table></div>
+      <div id="log" class="scroll"><table class="mid"><tbody id="log-rows"></tbody></table></div>
+    </section>
+    <section class="card">
+      <h2>Messages for the channel</h2>
+      <p class="hint" id="sending"></p>
+      <div id="messages"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Recent earthquakes: who knew first</h2>
+    <p class="hint">Delays count from the time the IGC gives the earthquake, which in its first minutes can be up to a minute late: "before" means the sensor had it
+      before that time. Head start compares the two moments on this computer's clock. The sensor knows only that the ground moved and roughly how much; place and final size come from the agencies.</p>
+    <div class="scroll"><table class="wide">
+      <thead><tr><th>Panama time</th><th class="num">Mag.</th><th>IGC status</th><th>Where</th><th>Sensor</th><th class="num">IGC published</th><th class="num">Head start</th><th class="num">GFZ published</th></tr></thead>
+      <tbody id="quakes"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Sensor triggers</summary>
+      <div class="scroll"><table class="wide">
+        <thead><tr><th>Signal time</th><th class="num">Top ratio</th><th class="num">Largest motion</th><th class="num">Reading</th><th>Alert</th><th class="num">Known after</th><th class="num">Stream delay</th></tr></thead>
+        <tbody id="triggers"></tbody>
+      </table></div>
+    </details>
+  </section>
+
+  <footer>The sensor's reading carries no location and is right only for an earthquake about as far from the station as Azuero (200 km); it was within a
+    quarter of a magnitude of the IGC's in testing. Measurements and limits are in README.md (Results).</footer>
+</main>
+
+<script>
+"use strict";
+const SPAN = 600;                                   // seconds of signal drawn
+const FEEDS = {igc: "IGC (Univ. of Panama)", gfz: "GFZ GEOFON", ptwc: "PTWC tsunami bulletins"};
+const SHORT = {igc: "IGC", gfz: "GFZ", ptwc: "PTWC", sensor: "sensor", sensors: "sensors"};
+const SVG = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+
+const theme = new URLSearchParams(location.search).get("theme");
+if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+
+let state = null, offset = 0, hover = null, booted = false;
+const parts = {}, drawn = {}, logged = new Set();
+const now = () => Date.now() / 1000 + offset;        // the server's corrected clock, in seconds
+
+// Every text below comes from feeds or log files: it goes in as text, never as markup.
+function el(tag, attrs, ...kids) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value == null || value === false) continue;
+    if (key === "class") node.className = value; else if (key === "text") node.textContent = value; else node.setAttribute(key, value);
+  }
+  node.append(...kids.flat().filter((kid) => kid != null));
+  return node;
+}
+function svg(tag, attrs, text) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  if (text != null) node.textContent = text;
+  return node;
+}
+function clock(t, seconds = true) {                  // epoch seconds -> "3:05:12 PM", Panama time (UTC-5, no summer time)
+  const d = new Date((t - 5 * 3600) * 1000), two = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCHours() % 12 || 12}:${two(d.getUTCMinutes())}${seconds ? ":" + two(d.getUTCSeconds()) : ""} ${d.getUTCHours() < 12 ? "AM" : "PM"}`;
+}
+function span(seconds) {                             // a duration in words
+  const s = Math.max(0, Math.round(seconds));
+  return s < 300 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+}
+const ago = (t) => el("span", {"data-t": t, text: span(now() - t) + " ago"});
+const from = (seconds) => seconds < 0 ? `${span(-seconds)} before` : `+${span(seconds)}`;      // against the time the agency gives the earthquake, which can be late
+const num = (n) => Math.round(n).toLocaleString("en-US");
+const mag = (m) => m == null ? "–" : "M" + Number(m).toFixed(1);
+const reads = (counts) => state.line && counts > 0 ? state.line.mag_slope * Math.log10(counts) + state.line.mag_offset : null;      // the calibration line
+function nice(v) {                                   // next round number, so the scale does not flicker
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  return [1, 2, 5, 10].map((m) => m * p).find((x) => x >= v);
+}
+function status(kind, text) {
+  const icon = {good: "●", warning: "▲", critical: "▲", off: "○"}[kind];
+  return el("span", {class: "status"}, el("span", {class: "icon " + kind, "aria-hidden": "true", text: icon}), el("span", {text}));
+}
+function once(name, data, build) {                   // rebuild a block only when its data changed, so selections survive
+  const sig = JSON.stringify(data);
+  if (drawn[name] !== sig) { drawn[name] = sig; build(); }
+}
+
+// ---------- status chips ----------
+function chip(kind, title, text) {
+  const icon = {good: "●", warning: "▲", critical: "▲", off: "○"}[kind];
+  return el("div", {class: "chip"}, el("span", {class: "icon " + kind, "aria-hidden": "true", text: icon}),
+            el("div", {}, el("strong", {text: title}), el("span", {class: "text", text})));
+}
+function drawChips() {
+  const t = now(), chips = [], s = state.signal;
+  const last = state.requests.length ? state.requests[state.requests.length - 1].at_t : null;
+  const failing = Object.entries(state.feeds).filter(([, f]) => ![200, 304].includes(f.last.status)).map(([k]) => SHORT[k] || k);
+  if (last == null) chips.push(chip("off", "Agency feeds", "The listener has not run yet."));
+  else if (t - last > 45) chips.push(chip("critical", "Agency feeds: stopped", `Last request ${span(t - last)} ago.`));
+  else if (failing.length) chips.push(chip("warning", "Agency feeds: running, with failures", `Not answering: ${failing.join(", ")}.`));
+  else chips.push(chip("good", "Agency feeds: running", `Last request ${span(t - last)} ago; ${Object.keys(state.feeds).length} feeds answering.`));
+
+  const from_mag = s && s.announces_from != null ? s.announces_from : state.detect ? state.detect.min_mag : null;      // config.json can change it while running
+  const limit = from_mag != null ? ` Announces from a reading of ${mag(from_mag)}.` : "";
+  if (!s) chips.push(chip("off", "Sensor", "The detector has not run yet."));
+  else if (t - s.arrived > 60) {
+    // The detector notes each time it connects (every two minutes while the station is silent): that tells the two cases apart.
+    const tried = state.detect && state.detect.connecting ? t - Date.parse(state.detect.connecting) / 1000 : Infinity;
+    if (tried < 300 || t - s.arrived < 300) chips.push(chip("critical", "Sensor: no signal from the station",
+      `Last signal arrived ${span(t - s.arrived)} ago. The detector is running and connects again every two minutes; the agency's reports are not affected.`));
+    else chips.push(chip("critical", "Sensor: detector stopped", `Last signal arrived ${span(t - s.arrived)} ago, and the detector last tried to connect ${isFinite(tried) ? span(tried) + " ago" : "before it was restarted"}.`));
+  }
+  else if (s.warming) chips.push(chip("off", "Sensor: starting", "It needs two minutes of signal before it can trigger."));
+  else if (s.arrived - s.end > 30) chips.push(chip("warning", "Sensor: stream running late", `The signal is arriving ${span(s.arrived - s.end)} after it is recorded.`));
+  else chips.push(chip("good", "Sensor: streaming", `Signal arrives ${span(s.arrived - s.end)} after it is recorded.${limit}`));
+
+  const to = (state.listen && state.listen.sends_to) || [], wa = state.whatsapp || {};
+  const names = to.map((k) => ({whatsapp_web: `the WhatsApp channel "${wa.channel || "?"}"`, whatsapp_waha: "WhatsApp", telegram: "Telegram"})[k] || k);
+  const window_ok = wa.at_t && t - wa.at_t < 90;                 // the browser window that posts to WhatsApp reports every 30 s
+  if (!to.length) chips.push(chip("off", "Sending: off", "No destination in config.json, so nothing leaves this computer."));
+  else if (to.includes("whatsapp_web") && !window_ok) chips.push(chip("critical", "Sending: WhatsApp window stopped", wa.at_t ? `It last reported ${span(t - wa.at_t)} ago: ${wa.state}.` : "It has not started."));
+  else if (to.includes("whatsapp_web") && wa.state !== "ready") chips.push(chip("warning", "Sending: WhatsApp window not ready", wa.state + "."));
+  else chips.push(chip("good", "Sending: on", `Messages go to ${names.join(" and ")}.${wa.last ? " Last one: " + wa.last + "." : ""}`));
+  $("chips").replaceChildren(...chips);
+  $("sending").textContent = to.length ? `Newest first. Each is posted to ${names.join(" and ")} the moment it is written.`
+    : "What would be posted, newest first. Nothing is being sent: no destination is set in config.json.";
+}
+
+// ---------- live sensor ----------
+function setupChart() {
+  const p = parts;
+  p.bands = svg("g"); p.grid = svg("g"); p.zero = svg("line", {class: "zero"}); p.limit = svg("g"); p.area = svg("polygon", {class: "area"}); p.marks = svg("g"); p.scale = svg("text", {class: "note", x: 2, y: 10});
+  $("wave").append(p.bands, p.grid, p.zero, p.limit, p.area, p.marks, p.scale);
+  p.level = svg("line", {class: "level"}); p.line = svg("path", {class: "rline"}); p.rmarks = svg("g"); p.rnote = svg("text", {class: "note", x: 2}, "ratio · trigger level");
+  $("ratio").append(p.level, p.line, p.rmarks, p.rnote);
+  const chart = $("chart");
+  chart.addEventListener("pointermove", (e) => { hover = e.clientX - chart.getBoundingClientRect().left; drawHover(); });
+  chart.addEventListener("pointerleave", () => { hover = null; drawHover(); });
+  chart.addEventListener("blur", () => { hover = null; drawHover(); });
+  chart.addEventListener("keydown", (e) => {
+    const W = chart.clientWidth;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      hover = Math.min(W, Math.max(0, (hover == null ? W : hover) + (e.key === "ArrowLeft" ? -1 : 1) * W / 120));
+      e.preventDefault();
+    } else if (e.key === "Escape") hover = null; else return;
+    drawHover();
+  });
+}
+function drawChart() {
+  const W = Math.max($("chart").clientWidth, 200), t1 = now(), t0 = t1 - SPAN, X = (t) => (t - t0) / SPAN * W;
+  const every = W / 10 >= 64 ? 60 : W / 10 >= 32 ? 120 : 300, marks = [];
+  for (let t = Math.ceil(t0 / every) * every; t <= t1; t += every) marks.push(t);
+  const p = parts, s = state.signal, H = 110, h = 40;
+  $("wave").setAttribute("viewBox", `0 0 ${W} ${H}`);
+  $("ratio").setAttribute("viewBox", `0 0 ${W} ${h}`);
+  p.grid.replaceChildren(...marks.map((t) => svg("line", {class: "gridline", x1: X(t), x2: X(t), y1: 0, y2: H})));
+  for (const [line, y] of [[p.zero, H / 2], [p.level, 0]]) { line.setAttribute("x1", 0); line.setAttribute("x2", W); line.setAttribute("y1", y); line.setAttribute("y2", y); }
+  if (!s) { $("meta").textContent = "no signal received yet"; p.area.setAttribute("points", ""); p.line.setAttribute("d", ""); p.scale.textContent = ""; }
+  else {
+    const first = Math.max(0, Math.ceil((t0 - s.start) / s.step - 0.5)), sizes = [];
+    let peak = 0;
+    for (let i = first; i < s.lo.length; i++) { peak = Math.max(peak, -s.lo[i], s.hi[i]); sizes.push(s.hi[i] - s.lo[i]); }
+    sizes.sort((a, c) => a - c);
+    const A = nice(Math.max(peak, (sizes.length ? sizes[sizes.length >> 1] : 0) * 3, 1));       // quiet ground keeps a sixth of the height
+    const Y = (v) => H / 2 - v / A * (H / 2 - 3);
+    const lo = Math.log10(0.5), hi = Math.log10(300);
+    const R = (r) => h - 2 - (Math.log10(Math.min(Math.max(r, 0.5), 300)) - lo) / (hi - lo) * (h - 4);
+    const top = [], bottom = [];
+    let d = "", pen = false;
+    for (let i = first; i < s.lo.length; i++) {
+      const x = X(s.start + (i + 0.5) * s.step).toFixed(1);
+      top.push(`${x},${Y(s.hi[i]).toFixed(1)}`);
+      bottom.push(`${x},${Y(s.lo[i]).toFixed(1)}`);
+      if (s.ratio[i] > 0) { d += `${pen ? "L" : "M"}${x} ${R(s.ratio[i]).toFixed(1)}`; pen = true; } else pen = false;
+    }
+    p.area.setAttribute("points", top.concat(bottom.reverse()).join(" "));
+    p.line.setAttribute("d", d);
+    p.level.setAttribute("y1", R(5)); p.level.setAttribute("y2", R(5)); p.rnote.setAttribute("y", R(5) - 4);
+    p.scale.textContent = `±${num(A)} counts${reads(A) == null ? "" : ` · the top of this scale would read ${mag(reads(A))}`}`;
+    // the motion that reads as the announcing magnitude, drawn once the scale reaches it
+    const from_mag = s.announces_from != null ? s.announces_from : state.detect ? state.detect.min_mag : null;
+    const need = state.line && from_mag != null ? Math.pow(10, (from_mag - state.line.mag_offset) / state.line.mag_slope) : Infinity;
+    p.limit.replaceChildren(...(need <= A ? [Y(need), Y(-need)].map((y) => svg("line", {class: "level", x1: 0, x2: W, y1: y, y2: y}))
+      .concat(svg("text", {class: "note", x: W - 2, y: Y(need) - 4, "text-anchor": "end"}, `reads ${mag(from_mag)}: an alert`)) : []));
+    const follow = s.followed_s || 60, mine = state.triggers.filter((g) => g.trigger_t >= t0 - follow);
+    p.bands.replaceChildren(...mine.map((g) => {
+      const x0 = Math.max(X(g.trigger_t), 0), x1 = Math.min(X(g.trigger_t + follow), X(s.end), W);                 // shaded as far as the signal has arrived
+      return x1 > x0 ? svg("rect", {class: "followed", x: x0, y: 0, width: x1 - x0, height: H}) : null;
+    }).filter(Boolean));
+    p.marks.replaceChildren(...mine.filter((g) => g.trigger_t >= t0).flatMap((g) => {
+      const x = X(g.trigger_t);
+      return [svg("line", {class: "trig", x1: x, x2: x, y1: 0, y2: H}), svg("path", {class: "trig-head", d: `M${x - 4} 0H${x + 4}L${x} 7Z`})];
+    }));
+    p.rmarks.replaceChildren(...mine.filter((g) => g.trigger_t >= t0).map((g) => svg("line", {class: "trig", x1: X(g.trigger_t), x2: X(g.trigger_t), y1: 0, y2: h})));
+    const n = s.ratio.length, stale = t1 - s.arrived > 60;
+    $("meta").textContent = `${stale ? "last signal " + span(t1 - s.arrived) + " ago" : "stream " + span(s.arrived - s.end) + " behind"} · ratio now ${n ? s.ratio[n - 1].toFixed(1) : "–"}`
+      + (s.warming ? " · starting" : s.following && !stale ? ` · following a trigger: reads ${mag(s.following.reads)} so far` : "");
+  }
+
+  // who knew when: the agency's earthquake time and publication, and the sensor's alert
+  const lane = $("lane"), wide = W >= 700, items = [];
+  lane.setAttribute("viewBox", `0 0 ${W} 46`);
+  const label = (x, y, text, x0 = x) => x > W - (wide ? 250 : 120)
+    ? svg("text", {class: "lane-label", x: x0 - 10, y: y + 4, "text-anchor": "end"}, text) : svg("text", {class: "lane-label", x: x + 10, y: y + 4}, text);
+  const diamond = (x) => svg("path", {class: "m-sensors", d: `M${x} 7L${x + 6} 13L${x} 19L${x - 6} 13Z`});
+  for (const q of state.earthquakes) {
+    const told = Object.entries(q.by).filter(([, v]) => v.seen_t).sort((a, c) => a[1].seen_t - c[1].seen_t)[0];
+    const x0 = X(q.origin_t), y = 34;
+    if (told && told[1].delay_s > 1800) continue;                 // an old earthquake listed late is not news, and listen.py does not announce it
+    if (told && X(told[1].seen_t) >= 0) {
+      const xp = X(told[1].seen_t), name = SHORT[told[0]] || told[0];
+      items.push(svg("line", {class: "lane-link", x1: Math.max(x0, 0), x2: xp, y1: y, y2: y}));
+      if (x0 >= 0) items.push(svg("circle", {class: "m-origin", cx: x0, cy: y, r: 4.5}));
+      items.push(svg("circle", {class: "m-published", cx: xp, cy: y, r: 5.5}),
+                 label(xp, y, wide ? `${name} ${mag(told[1].first_mag)} · published +${span(told[1].delay_s)}` : `${name} +${span(told[1].delay_s)}`, Math.max(x0, 0)));
+    } else if (!told && x0 >= 0) items.push(svg("circle", {class: "m-origin", cx: x0, cy: y, r: 4.5}), label(x0, y, mag(q.mag)));
+    const a = q.sensor;
+    if (a && a.declared_seen_t && X(a.declared_seen_t) >= 0)
+      items.push(diamond(X(a.declared_seen_t)), label(X(a.declared_seen_t), 13, wide ? `sensor ${from(a.declared_s)} · read ${mag(a.first_reading)}` : `sensor ${from(a.declared_s)}`));
+  }
+  for (const a of state.lone)
+    if (X(a.seen_t) >= 0) items.push(diamond(X(a.seen_t)), label(X(a.seen_t), 13, wide ? `sensor read ${mag(a.reading)} · no agency report` : `sensor ${mag(a.reading)}`));
+  lane.replaceChildren(...items);
+
+  const axis = $("axis");
+  axis.setAttribute("viewBox", `0 0 ${W} 22`);
+  axis.replaceChildren(svg("line", {class: "tick", x1: 0, x2: W, y1: 0.5, y2: 0.5}), ...marks.flatMap((t) => {
+    const x = X(t), out = [svg("line", {class: "tick", x1: x, x2: x, y1: 0, y2: 5})];
+    if (x > 30 && x < W - 30) out.push(svg("text", {class: "tick-label", x, y: 17, "text-anchor": "middle"}, clock(t, false)));
+    return out;
+  }));
+  drawHover();
+}
+function drawHover() {
+  const cross = $("cross"), tip = $("tip");
+  if (hover == null || !state) { cross.hidden = tip.hidden = true; return; }
+  const W = $("chart").clientWidth, x = Math.min(W, Math.max(0, hover)), t = now() - SPAN + x / W * SPAN;
+  const s = state.signal, i = s ? Math.floor((t - s.start) / s.step) : -1, inside = s && i >= 0 && i < s.lo.length;
+  const size = inside ? Math.max(-s.lo[i], s.hi[i]) : 0;
+  const hit = state.triggers.find((g) => Math.abs(g.trigger_t - t) <= 3);
+  const more = [inside && reads(size) != null ? `on its own would read ${mag(reads(size))}` : null, inside && s.ratio[i] > 0 ? `ratio ${s.ratio[i].toFixed(1)}` : null,
+                hit ? "trigger" : null].filter(Boolean).join(" · ");
+  tip.replaceChildren(el("div", {class: "when"}, el("strong", {text: clock(t)}), ` · ${span(now() - t)} ago`),
+                      el("div", {class: "row"}, el("span", {class: "key"}), el("strong", {text: inside ? `±${num(size)} counts` : "no signal"}), el("em", {text: more})));
+  cross.hidden = tip.hidden = false;
+  cross.style.left = x + "px";
+  tip.style.left = (x > W - tip.offsetWidth - 20 ? x - tip.offsetWidth - 12 : x + 12) + "px";
+}
+
+// ---------- requests ----------
+function outcome(r) {
+  if (r.status === 200) return r.new ? status("good", "200 · new data") : status("off", "200 · nothing new");
+  if (r.status === 304) return status("off", "304 · not modified");
+  return status("critical", `failed · ${r.status}${r.note ? ": " + r.note : ""}`);
+}
+function drawRequests() {
+  const order = Object.keys(FEEDS).filter((k) => state.feeds[k]).concat(Object.keys(state.feeds).filter((k) => !FEEDS[k]));
+  $("feeds").replaceChildren(...order.map((k) => {
+    const f = state.feeds[k], every = state.listen && state.listen.polls && state.listen.polls[k];
+    return el("tr", {}, el("td", {text: FEEDS[k] || k}), el("td", {class: "quiet nowrap", text: every ? `every ${every} s` : "–"}),
+              el("td", {}, outcome(f.last), f.failed ? el("small", {text: ` ${f.failed} of the last ${f.count} failed`}) : null),
+              el("td", {class: "num"}, ago(f.last.at_t)), el("td", {class: "num", text: `${num(f.last.ms)} ms`}),
+              el("td", {class: "num"}, f.new_t ? ago(f.new_t) : el("span", {class: "quiet", text: "none yet"})));
+  }));
+  const rows = $("log-rows");
+  for (const r of state.requests) {
+    const key = r.at + r.feed + r.status;
+    if (logged.has(key)) continue;
+    logged.add(key);
+    rows.prepend(el("tr", {class: booted ? "fresh" : null}, el("td", {class: "time", text: clock(r.at_t)}), el("td", {text: SHORT[r.feed] || r.feed.toUpperCase()}), el("td", {}, outcome(r)),
+                    el("td", {class: "num", text: `${num(r.ms)} ms`}), el("td", {class: "num", text: r.bytes ? `${(r.bytes / 1024).toFixed(r.bytes < 10240 ? 1 : 0)} kB` : ""})));
+  }
+  while (rows.children.length > 60) rows.lastChild.remove();
+  if (logged.size > 3000) { logged.clear(); for (const r of state.requests) logged.add(r.at + r.feed + r.status); }
+}
+
+// ---------- messages, earthquakes, triggers ----------
+function drawMessages() {
+  once("messages", [state.outbox, state.sent], () => {
+    const kinds = {alert: "Alert", update: "Update", detection: "Sensor alert", log: "Line in the day's log (no notification)"};
+    const list = state.outbox.slice().reverse().map((m) => {
+      const sent = state.sent.filter((x) => x.event === m.event && x.type === m.type).map((x) => `${x.to}: ${x.outcome} in ${x.seconds} s`);
+      const meta = el("div", {class: "meta"}, el("strong", {text: kinds[m.type] || m.type}), ` · ${clock(m.created_t)} · from ${SHORT[m.source] || m.source}`,
+                      m.delay_s != null ? ` · ${span(m.delay_s)} after the earthquake` : "", ` · ${sent.length ? sent.join(", ") : "not sent"}`);
+      return el("div", {class: "msg"}, meta, el("pre", {text: m.text}));
+    });
+    $("messages").replaceChildren(...(list.length ? list : [el("p", {class: "quiet", text: "No message yet. One is written when the IGC lists a Panama earthquake of M4 or more, or when the sensor's reading reaches the announcing level."})]));
+  });
+}
+function drawQuakes() {
+  once("quakes", [state.earthquakes, state.lone, state.detect], () => {
+    const watching = state.detect ? Date.parse(state.detect.started) / 1000 + 120 : Infinity;      // the detector's first two minutes do not count
+    const rows = state.earthquakes.map((q) => {
+      const s = q.sensor, igc = q.by.igc, gfz = q.by.gfz, told = igc && igc.delay_s != null;
+      const sensor = !s ? el("span", {class: "quiet", text: q.origin_t < watching ? "–" : "no trigger"})
+        : s.declared_s != null ? `alert ${from(s.declared_s)} · read ${mag(s.first_reading)}${s.reading > s.first_reading + 0.05 ? ", in the end " + mag(s.reading) : ""}`
+        : el("span", {class: "quiet", text: s.reading == null ? `trigger known ${from(s.trigger_seen_s)}, still being read`
+                                              : `trigger known ${from(s.trigger_seen_s)}, read ${mag(s.reading)}: below the announcing level`});
+      return [q.origin_t, el("tr", {}, el("td", {class: "time", text: clock(q.origin_t)}),
+        el("td", {class: "num", text: q.mag == null ? "–" : Number(q.mag).toFixed(1)}), el("td", {class: "quiet", text: igc && igc.status ? igc.status.toLowerCase() : "–"}),
+        el("td", {text: q.place || `${q.lat.toFixed(2)}, ${q.lon.toFixed(2)}`}), el("td", {}, sensor),
+        el("td", {class: "num"}, told ? `+${span(igc.delay_s)}` : el("span", {class: "quiet", text: igc ? "before this run" : "not listed"})),
+        el("td", {class: "num", text: told && s && s.declared_s != null ? `${span(Math.abs(igc.delay_s - s.declared_s))}${igc.delay_s < s.declared_s ? " behind" : ""}` : "–"}),
+        el("td", {class: "num quiet", text: gfz && gfz.delay_s != null ? `+${span(gfz.delay_s)}` : "–"}))];
+    }).concat(state.lone.map((a) => [a.signal_t, el("tr", {}, el("td", {class: "time", text: clock(a.signal_t)}), el("td", {class: "num", text: "–"}), el("td", {class: "quiet", text: "–"}),
+        el("td", {class: "quiet", text: "no agency has reported it"}), el("td", {text: `alert · read ${mag(a.reading)}`}), el("td", {class: "num", text: "–"}), el("td", {class: "num", text: "–"}), el("td", {class: "num quiet", text: "–"}))]));
+    rows.sort((a, c) => c[0] - a[0]);
+    $("quakes").replaceChildren(...(rows.length ? rows.map((r) => r[1]) : [el("tr", {}, el("td", {colspan: 8, class: "quiet", text: "No earthquake reported yet in this log."}))]));
+  });
+}
+function drawTriggers() {
+  once("triggers", state.triggers, () => {
+    const rows = state.triggers.slice().reverse().map((g) => el("tr", {}, el("td", {class: "time", text: clock(g.trigger_t)}), el("td", {class: "num", text: g.ratio.toFixed(1)}),
+      el("td", {class: "num", text: g.peak == null ? "…" : `${num(g.peak)} counts`}), el("td", {class: "num", text: g.reading == null ? "…" : mag(g.reading)}),
+      el("td", {class: g.declared ? null : "quiet", text: g.declared == null ? "…" : g.declared ? "written" : "no"}),
+      el("td", {class: "num", text: span(g.seen_t - g.trigger_t)}), el("td", {class: "num", text: `${g.stream_delay_s.toFixed(1)} s`})));
+    $("triggers").replaceChildren(...(rows.length ? rows : [el("tr", {}, el("td", {colspan: 7, class: "quiet", text: "No trigger yet."}))]));
+  });
+}
+
+// ---------- loop ----------
+function tick() {
+  const t = now(), d = new Date(t * 1000), two = (n) => String(n).padStart(2, "0");
+  $("clock-pa").textContent = clock(t);
+  $("clock-utc").textContent = `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
+  for (const node of document.querySelectorAll("[data-t]")) node.textContent = span(t - Number(node.dataset.t)) + " ago";
+}
+function trouble(text) { $("banner").textContent = text; $("banner").hidden = !text; }
+async function refresh() {
+  try {
+    const answer = await fetch("/state", {cache: "no-store"});
+    if (!answer.ok) throw new Error(`monitor.py answered ${answer.status} ${answer.statusText}`);
+    state = await answer.json();
+    offset = state.now - Date.now() / 1000;
+    trouble("");
+  } catch (e) {
+    trouble(location.protocol === "file:" || e instanceof TypeError
+      ? "No answer from monitor.py, so nothing below is live. Start it with:  python src/monitor.py --start --open."
+      : String(e.message || e));
+  }
+  if (state) { drawChips(); drawChart(); drawRequests(); drawMessages(); drawQuakes(); drawTriggers(); booted = true; }
+  tick();
+  setTimeout(refresh, 1000);
+}
+window.addEventListener("error", (e) => trouble("Page error: " + e.message));
+window.addEventListener("resize", () => { if (state) drawChart(); });
+setupChart();
+refresh();
+</script>
+</body>
+</html>

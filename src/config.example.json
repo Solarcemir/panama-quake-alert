@@ -1,0 +1,17 @@
+{
+  "whatsapp_web": {
+    "channel": "NAME_OF_YOUR_CHANNEL_AS_WHATSAPP_SHOWS_IT"
+  },
+  "whatsapp_waha": {
+    "url": "http://localhost:3000",
+    "session": "default",
+    "chat_id": "REPLACE_WITH_CHANNEL_ID@newsletter",
+    "api_key": ""
+  },
+  "telegram": {
+    "token": "REPLACE_WITH_BOT_TOKEN",
+    "chat_id": "@replace_with_channel_name"
+  },
+  "sensor_min_mag": 5.0,
+  "send_updates": false
+}

@@ -1,0 +1,68 @@
+{
+ "made_utc": "2026-10-11T00:43:03",
+ "station": "CU.BCIP.00.BHZ",
+ "recordings": [
+  "2026-10-07T18:00:00",
+  "2026-10-11T00:17:43"
+ ],
+ "split": "2026-10-10T06:40:00",
+ "igc_earthquakes": {
+  "ordinary_days": 7,
+  "fit": 100,
+  "test": 91
+ },
+ "line": {
+  "mag_slope": 0.9093095910743243,
+  "mag_offset": 0.27867031123372543,
+  "mag_error": 0.25,
+  "first_slope": 0.9357278377153327,
+  "first_offset": 0.31454067377249884,
+  "first_error": 0.3,
+  "fitted_on": 143,
+  "followed_s": 60,
+  "first_wave_s": 15
+ },
+ "saw_m45": "96/101",
+ "saw_m45_test_hours": "33/33",
+ "trigger_after_s": 34,
+ "triggers_with_no_igc_per_hour_sequence": 11.3,
+ "triggers_with_no_igc_per_day_ordinary": 15,
+ "announcing": {
+  "4.5": {
+   "igc_that_size_announced": "89/101",
+   "in_test_hours": "28/33",
+   "by_chance": 13.8,
+   "seconds_after_earthquake": 35,
+   "alerts_in_sequence": 157,
+   "with_no_igc_earthquake": 49,
+   "far_too_high": 4,
+   "alerts_in_test_hours": 39,
+   "with_no_igc_in_test_hours": 2,
+   "alerts_on_ordinary_days": 0
+  },
+  "5.0": {
+   "igc_that_size_announced": "35/40",
+   "in_test_hours": "5/5",
+   "by_chance": 5.0,
+   "seconds_after_earthquake": 35,
+   "alerts_in_sequence": 58,
+   "with_no_igc_earthquake": 9,
+   "far_too_high": 5,
+   "alerts_in_test_hours": 9,
+   "with_no_igc_in_test_hours": 1,
+   "alerts_on_ordinary_days": 0
+  },
+  "5.5": {
+   "igc_that_size_announced": "10/17",
+   "in_test_hours": "1/1",
+   "by_chance": 0.5,
+   "seconds_after_earthquake": 34,
+   "alerts_in_sequence": 14,
+   "with_no_igc_earthquake": 1,
+   "far_too_high": 0,
+   "alerts_in_test_hours": 1,
+   "with_no_igc_in_test_hours": 0,
+   "alerts_on_ordinary_days": 0
+  }
+ }
+}
